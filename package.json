@@ -1,0 +1,21 @@
+{
+  "name": "strest-orchestrator",
+  "version": "1.0.0",
+  "description": "Headless Multi-Step REST API Test & Chaining Engine",
+  "main": "src/index.mjs",
+  "type": "module",
+  "scripts": {
+    "test": "node tests/run_all.mjs",
+    "run": "node src/cli/index.mjs run"
+  },
+  "keywords": [
+    "rest",
+    "api-testing",
+    "chaining",
+    "mcp",
+    "strest",
+    "agentic"
+  ],
+  "author": "Diamantenschmiede",
+  "license": "MIT"
+}

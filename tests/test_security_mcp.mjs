@@ -1,0 +1,93 @@
+/**
+ * Test Suite: Strest Security, SSRF & MCP Pen-Test (Gang 3)
+ * Part of Diamantenschmiede (AYA Protocol / Fire Team Elite Certified)
+ */
+
+import assert from 'assert';
+import { SecurityGuard } from '../src/core/guard.mjs';
+import { handleRequest } from '../src/mcp/server.mjs';
+
+async function runTest() {
+  console.log('🧪 [GANG 3 TEST] Starte SSRF-Defense & MCP Server Test Suite...');
+
+  // 1. SSRF Cloud Metadata Defense
+  const maliciousUrls = [
+    'http://169.254.169.254/latest/meta-data/',
+    'http://metadata.google.internal/computeMetadata/v1/',
+    'http://100.100.100.200/latest/meta-data/',
+    'ftp://example.com/test',
+    'file:///etc/passwd'
+  ];
+
+  for (const url of maliciousUrls) {
+    assert.throws(
+      () => SecurityGuard.validateUrl(url),
+      /Security Violation/,
+      `Muss böswillige URL/Protokoll blockieren: ${url}`
+    );
+  }
+
+  // 2. Path Traversal & Credential Leakage Defense
+  const maliciousPaths = [
+    '../../.env',
+    'subdir/../id_rsa',
+    'credentials.csv\0.json'
+  ];
+
+  for (const p of maliciousPaths) {
+    assert.throws(
+      () => SecurityGuard.validateSafePath(p),
+      /Security Violation/,
+      `Muss Pfad-Angriff blockieren: ${p}`
+    );
+  }
+
+  // 3. MCP Handshake & Tool Listing
+  const initRes = await handleRequest({
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'initialize',
+    params: {}
+  });
+  assert.strictEqual(initRes.result.serverInfo.name, 'strest-mcp');
+
+  const toolsRes = await handleRequest({
+    jsonrpc: '2.0',
+    id: 2,
+    method: 'tools/list',
+    params: {}
+  });
+  assert.strictEqual(toolsRes.result.tools.length, 2);
+
+  // 4. MCP Template Generation
+  const tplRes = await handleRequest({
+    jsonrpc: '2.0',
+    id: 3,
+    method: 'tools/call',
+    params: {
+      name: 'strest_template',
+      arguments: { baseUrl: 'http://127.0.0.1:8080' }
+    }
+  });
+  assert.strictEqual(tplRes.result.content[0].text.includes('auth_step'), true);
+
+  // 5. MCP Traversal Attack Defense
+  const attackRes = await handleRequest({
+    jsonrpc: '2.0',
+    id: 4,
+    method: 'tools/call',
+    params: {
+      name: 'strest_run_scenario',
+      arguments: { scenarioPath: '../../.env' }
+    }
+  });
+  assert.strictEqual(attackRes.error !== undefined, true);
+  assert.strictEqual(attackRes.error.message.includes('Security Violation'), true);
+
+  console.log('✅ [GANG 3 TEST BESTANDEN] SSRF-Schutz & MCP Server Interface zu 100% grün!');
+}
+
+runTest().catch((err) => {
+  console.error('❌ [TEST FEHLGESCHLAGEN]:', err);
+  process.exit(1);
+});
