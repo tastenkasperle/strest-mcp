@@ -7,8 +7,10 @@ import { interpolateDeep } from './interpolator.mjs';
 import { validateAssertions } from './assert.mjs';
 import { SecurityGuard } from './guard.mjs';
 
+const MAX_REDIRECTS = 5;
+
 /**
- * Executes a single HTTP step
+ * Executes a single HTTP step with SSRF-safe redirect handling and timeout protection
  * @param {Object} stepDefinition 
  * @param {Object} context { steps: {}, env: {} }
  * @param {Object} options 
@@ -21,20 +23,27 @@ export async function executeStep(stepDefinition, context = {}, options = {}) {
   const url = step.url;
   const method = (step.method || 'GET').toUpperCase();
   const headers = step.headers || {};
-  let body = step.body;
+  const body = step.body;
+  const allowLocalhost = options.allowLocalhost ?? true;
+  const timeoutMs = options.timeoutMs || step.timeoutMs || 15000;
 
-  // Validate URL with SSRF Guard
-  SecurityGuard.validateUrl(url, { allowLocalhost: options.allowLocalhost ?? true });
+  // Validate initial URL with SSRF Guard
+  SecurityGuard.validateUrl(url, { allowLocalhost });
 
   const fetchOptions = {
     method,
-    headers: { ...headers }
+    headers: { ...headers },
+    redirect: 'manual',
+    signal: AbortSignal.timeout(timeoutMs)
   };
 
   if (body !== undefined && method !== 'GET' && method !== 'HEAD') {
     if (typeof body === 'object') {
       fetchOptions.body = JSON.stringify(body);
-      if (!fetchOptions.headers['content-type']) {
+      const hasContentType = Object.keys(fetchOptions.headers).some(
+        k => k.toLowerCase() === 'content-type'
+      );
+      if (!hasContentType) {
         fetchOptions.headers['content-type'] = 'application/json';
       }
     } else {
@@ -44,11 +53,33 @@ export async function executeStep(stepDefinition, context = {}, options = {}) {
 
   const startTime = Date.now();
   let response;
-  let responseData;
   let parsedBody;
 
   try {
-    response = await fetch(url, fetchOptions);
+    let currentUrl = url;
+    let currentOptions = { ...fetchOptions };
+
+    for (let redirectCount = 0; redirectCount <= MAX_REDIRECTS; redirectCount++) {
+      response = await fetch(currentUrl, currentOptions);
+
+      if ([301, 302, 303, 307, 308].includes(response.status)) {
+        const location = response.headers.get('location');
+        if (!location) break;
+        if (redirectCount === MAX_REDIRECTS) {
+          throw new Error(`Maximum redirect limit (${MAX_REDIRECTS}) exceeded`);
+        }
+        const resolvedRedirect = new URL(location, currentUrl).toString();
+        // Validate every redirect hop against SSRF Guard
+        SecurityGuard.validateUrl(resolvedRedirect, { allowLocalhost });
+        currentUrl = resolvedRedirect;
+        if (response.status === 303 || ((response.status === 301 || response.status === 302) && currentOptions.method === 'POST')) {
+          currentOptions = { ...currentOptions, method: 'GET', body: undefined };
+        }
+        continue;
+      }
+      break;
+    }
+
     const durationMs = Date.now() - startTime;
 
     const responseHeaders = {};
@@ -102,7 +133,8 @@ export async function executeScenario(scenario, options = {}) {
   const steps = scenario.steps || [];
   const context = {
     steps: {},
-    env: { ...(scenario.env || {}), ...(options.env || {}) }
+    env: { ...(scenario.env || {}), ...(options.env || {}) },
+    allowProcessEnv: options.allowProcessEnv === true
   };
 
   const results = [];

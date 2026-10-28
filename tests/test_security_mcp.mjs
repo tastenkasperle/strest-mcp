@@ -4,8 +4,16 @@
  */
 
 import assert from 'assert';
-import { SecurityGuard } from '../src/core/guard.mjs';
-import { handleRequest } from '../src/mcp/server.mjs';
+import {
+  SecurityGuard,
+  handleRequest,
+  executeScenario,
+  interpolate,
+  interpolateDeep,
+  assertResponse,
+  validateAssertions,
+  getByPath
+} from '../src/index.mjs';
 
 async function runTest() {
   console.log('🧪 [GANG 3 TEST] Starte SSRF-Defense & MCP Server Test Suite...');
@@ -31,7 +39,9 @@ async function runTest() {
   const maliciousPaths = [
     '../../.env',
     'subdir/../id_rsa',
-    'credentials.csv\0.json'
+    'credentials.csv\0.json',
+    '../../package.json',
+    '../../../../Windows/win.ini'
   ];
 
   for (const p of maliciousPaths) {
@@ -42,7 +52,19 @@ async function runTest() {
     );
   }
 
-  // 3. MCP Handshake & Tool Listing
+  // 2b. Prototype Pollution & Re-Export Integrity
+  assert.strictEqual(typeof executeScenario, 'function');
+  assert.strictEqual(interpolate, interpolateDeep);
+  assert.strictEqual(assertResponse, validateAssertions);
+  assert.strictEqual(getByPath({ a: 1 }, '__proto__.polluted'), undefined);
+  assert.strictEqual(getByPath({ a: 1 }, 'constructor.prototype'), undefined);
+
+  // 3. MCP Handshake, Notification & Tool Listing
+  const notifRes = await handleRequest({
+    jsonrpc: '2.0',
+    method: 'notifications/initialized'
+  });
+  assert.strictEqual(notifRes, null);
   const initRes = await handleRequest({
     jsonrpc: '2.0',
     id: 1,

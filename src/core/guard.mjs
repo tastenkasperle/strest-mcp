@@ -6,14 +6,15 @@
 import path from 'path';
 
 // Dangerous SSRF / Cloud Metadata Hosts
-const FORBIDDEN_HOSTS = [
-  '169.254.169.254',    // AWS / Azure / OpenStack IMDS
+const METADATA_HOSTS = new Set([
+  '169.254.169.254',          // AWS / Azure / OpenStack IMDSv1/v2
   'metadata.google.internal', // GCP Metadata
-  '100.100.100.200',    // Alibaba Cloud Metadata
-  'localhost',          // Can be overridden by option if explicitly allowed for local dev
-  '127.0.0.1',
-  '::1'
-];
+  'metadata',
+  '100.100.100.200',          // Alibaba Cloud Metadata
+  'instance-data',
+  '[fd00:ec2::254]',          // AWS IPv6 IMDS
+  'fd00:ec2::254'
+]);
 
 export class SecurityGuard {
   /**
@@ -25,14 +26,14 @@ export class SecurityGuard {
    */
   static validateUrl(rawUrl, options = { allowLocalhost: true }) {
     if (!rawUrl || typeof rawUrl !== 'string') {
-      throw new Error('Invalid URL provided');
+      throw new Error('Security Violation: Invalid URL provided');
     }
 
     let parsed;
     try {
       parsed = new URL(rawUrl);
     } catch (e) {
-      throw new Error(`Malformed URL: ${rawUrl}`);
+      throw new Error(`Security Violation: Malformed URL: ${rawUrl}`);
     }
 
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
@@ -41,14 +42,26 @@ export class SecurityGuard {
 
     const hostname = parsed.hostname.toLowerCase();
 
-    // Check Cloud Metadata Endpoints (Strict block, cannot be bypassed!)
-    if (hostname === '169.254.169.254' || hostname === 'metadata.google.internal' || hostname === '100.100.100.200') {
+    // Check Cloud Metadata Endpoints & Link-Local Ranges (Strict block, cannot be bypassed)
+    if (
+      METADATA_HOSTS.has(hostname) ||
+      hostname.startsWith('169.254.') ||
+      hostname.includes('ffff:169.254.') ||
+      hostname.includes('ffff:a9fe:a9fe')
+    ) {
       throw new Error(`Security Violation: Access to cloud instance metadata service (${hostname}) is blocked.`);
     }
 
     if (!options.allowLocalhost) {
-      if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname.startsWith('127.')) {
-        throw new Error(`Security Violation: Localhost access restricted in this environment.`);
+      if (
+        hostname === 'localhost' ||
+        hostname === '127.0.0.1' ||
+        hostname === '::1' ||
+        hostname === '[::1]' ||
+        hostname === '0.0.0.0' ||
+        hostname.startsWith('127.')
+      ) {
+        throw new Error('Security Violation: Localhost access restricted in this environment.');
       }
     }
 
@@ -56,26 +69,38 @@ export class SecurityGuard {
   }
 
   /**
-   * Validates safe file path against path traversal
+   * Validates safe file path against path traversal and sensitive credential exposure
    * @param {string} targetPath 
    * @param {string} allowedBaseDir 
    * @returns {string}
    */
   static validateSafePath(targetPath, allowedBaseDir = process.cwd()) {
     if (!targetPath || typeof targetPath !== 'string') {
-      throw new Error('Invalid path argument');
+      throw new Error('Security Violation: Invalid path argument');
     }
 
     if (targetPath.includes('\0')) {
       throw new Error('Security Violation: Null byte detected in path');
     }
 
-    const resolved = path.resolve(allowedBaseDir, targetPath);
+    const base = path.resolve(allowedBaseDir);
+    const resolved = path.resolve(base, targetPath);
     const basename = path.basename(resolved);
 
-    // Block sensitive secrets
-    if (/^\.env(\..+)?$/i.test(basename) || /^id_rsa/i.test(basename) || /masterpw/i.test(basename)) {
+    // Block sensitive secrets first
+    if (
+      /^\.env(\..+)?$/i.test(basename) ||
+      /^id_(rsa|ed25519|ecdsa)/i.test(basename) ||
+      /masterpw/i.test(basename) ||
+      /credentials/i.test(basename)
+    ) {
       throw new Error(`Security Violation: Protected credential file blocked: ${basename}`);
+    }
+
+    // Strict containment check inside allowedBaseDir
+    const rel = path.relative(base, resolved);
+    if (rel.startsWith('..') || path.isAbsolute(rel)) {
+      throw new Error(`Security Violation: Path traversal outside allowed workspace blocked: ${targetPath}`);
     }
 
     return resolved;

@@ -5,6 +5,8 @@
 
 import crypto from 'crypto';
 
+const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 /**
  * Resolves dot-notated path in an object (e.g. "steps.login.body.token")
  * @param {Object} obj 
@@ -12,11 +14,15 @@ import crypto from 'crypto';
  * @returns {any}
  */
 export function getByPath(obj, path) {
-  if (!obj || !path) return undefined;
+  if (!obj || !path || typeof path !== 'string') return undefined;
   const parts = path.split('.');
   let current = obj;
   for (const part of parts) {
     if (current === null || current === undefined) return undefined;
+    if (FORBIDDEN_KEYS.has(part)) return undefined;
+    if (typeof current !== 'object' || !Object.prototype.hasOwnProperty.call(current, part)) {
+      return undefined;
+    }
     current = current[part];
   }
   return current;
@@ -64,14 +70,21 @@ export function interpolateString(template, context = {}) {
 function resolveExpression(expr, context) {
   if (expr.startsWith('faker.') || expr.startsWith('helper.')) {
     const helperName = expr.split('.')[1];
-    if (SYNTHETIC_HELPERS[helperName]) {
+    if (Object.prototype.hasOwnProperty.call(SYNTHETIC_HELPERS, helperName)) {
       return SYNTHETIC_HELPERS[helperName]();
     }
   }
 
   if (expr.startsWith('env.')) {
     const envKey = expr.slice(4);
-    return process.env[envKey] || context.env?.[envKey];
+    if (FORBIDDEN_KEYS.has(envKey)) return undefined;
+    if (context?.env && Object.prototype.hasOwnProperty.call(context.env, envKey)) {
+      return context.env[envKey];
+    }
+    if (context?.allowProcessEnv === true) {
+      return process.env[envKey];
+    }
+    return undefined;
   }
 
   return getByPath(context, expr);
@@ -95,6 +108,7 @@ export function interpolateDeep(target, context = {}) {
   if (target !== null && typeof target === 'object') {
     const result = {};
     for (const [key, value] of Object.entries(target)) {
+      if (FORBIDDEN_KEYS.has(key)) continue;
       result[key] = interpolateDeep(value, context);
     }
     return result;

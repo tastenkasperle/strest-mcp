@@ -46,6 +46,15 @@ const TOOLS = [
 export async function handleRequest(request) {
   const { id, method, params } = request;
 
+  if (
+    method === 'notifications/initialized' ||
+    method === 'initialized' ||
+    (typeof method === 'string' && method.startsWith('notifications/')) ||
+    id === undefined
+  ) {
+    return null;
+  }
+
   if (method === 'initialize') {
     return {
       jsonrpc: '2.0',
@@ -160,7 +169,9 @@ if (process.argv[1] && process.argv[1].endsWith('server.mjs')) {
     try {
       const request = JSON.parse(line);
       const response = await handleRequest(request);
-      process.stdout.write(JSON.stringify(response) + '\n');
+      if (response !== null && response !== undefined) {
+        process.stdout.write(JSON.stringify(response) + '\n');
+      }
     } catch (err) {
       process.stdout.write(JSON.stringify({
         jsonrpc: '2.0',
