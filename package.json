@@ -1,21 +1,38 @@
 {
-  "name": "strest-orchestrator",
+  "name": "strest-mcp",
   "version": "1.0.0",
-  "description": "Headless Multi-Step REST API Test & Chaining Engine",
+  "description": "Declarative Multi-Step REST API Test & Chaining Engine for AI Agents and DevSecOps",
   "main": "src/index.mjs",
+  "bin": {
+    "strest": "src/cli/index.mjs",
+    "strest-mcp": "src/mcp/server.mjs"
+  },
   "type": "module",
   "scripts": {
     "test": "node tests/run_all.mjs",
+    "start": "node src/mcp/server.mjs",
     "run": "node src/cli/index.mjs run"
   },
   "keywords": [
-    "rest",
-    "api-testing",
-    "chaining",
     "mcp",
+    "model-context-protocol",
     "strest",
-    "agentic"
+    "api-testing",
+    "rest-client",
+    "chaining",
+    "ai-agents",
+    "devsecops",
+    "ssrf-protection",
+    "automation"
   ],
-  "author": "Diamantenschmiede",
-  "license": "MIT"
+  "author": "Christopher Hailfinger (Diamantenschmiede)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tastenkasperle/strest-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/tastenkasperle/strest-mcp/issues"
+  },
+  "homepage": "https://github.com/tastenkasperle/strest-mcp#readme"
 }

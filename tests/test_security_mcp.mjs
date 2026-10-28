@@ -51,6 +51,14 @@ async function runTest() {
   });
   assert.strictEqual(initRes.result.serverInfo.name, 'strest-mcp');
 
+  const pingRes = await handleRequest({
+    jsonrpc: '2.0',
+    id: 11,
+    method: 'ping',
+    params: {}
+  });
+  assert.deepStrictEqual(pingRes.result, {});
+
   const toolsRes = await handleRequest({
     jsonrpc: '2.0',
     id: 2,

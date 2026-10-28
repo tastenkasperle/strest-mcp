@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "name": "strest-mcp",
+  "version": "1.0.0",
+  "description": "Declarative Multi-Step REST API Test & Chaining Engine for AI Agents and DevSecOps",
+  "author": {
+    "name": "Diamantenschmiede",
+    "url": "https://github.com/tastenkasperle"
+  },
+  "homepage": "https://github.com/tastenkasperle/strest-mcp",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tastenkasperle/strest-mcp.git"
+  },
+  "capabilities": {
+    "tools": true
+  },
+  "transport": {
+    "type": "stdio",
+    "command": "node",
+    "args": [
+      "src/mcp/server.mjs"
+    ]
+  }
+}

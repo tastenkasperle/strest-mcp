@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 /**
  * Strest MCP Server (Model Context Protocol)
  * Native Stdio JSON-RPC 2.0 Server for Local AI Agents
@@ -54,6 +55,14 @@ export async function handleRequest(request) {
         capabilities: { tools: {} },
         serverInfo: { name: SERVER_NAME, version: SERVER_VERSION }
       }
+    };
+  }
+
+  if (method === 'ping') {
+    return {
+      jsonrpc: '2.0',
+      id,
+      result: {}
     };
   }
 

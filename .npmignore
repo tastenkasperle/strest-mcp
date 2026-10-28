@@ -1,0 +1,8 @@
+tests/
+.git/
+.github/
+SAVEGAME*.md
+SPEC.md
+raptor_audit_report.json
+Dockerfile
+.gitignore
